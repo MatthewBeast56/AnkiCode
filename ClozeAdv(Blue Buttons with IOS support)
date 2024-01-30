@@ -1,0 +1,564 @@
+<div id="ruin_temp_dst" >
+{{cloze:Text}}
+</div>
+<div id="ruin_temp_src" style="display:none">
+{{Text}}
+</div>
+<div class="dummy-placeholder"></div>
+<button class="dummy-btn noSelect" id="controls">
+  <div class="reveal-btn" id="cover-previous">Cover Previous</div>
+  <div class="reveal-btn" id="reveal-next">Reveal Next</div>
+</button>
+<style>
+.cloze{
+  outline:0px;
+}
+/* new add for reveal button */
+.noSelect {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+		
+}
+
+.dummy-btn {
+    background: #063970 !important;
+    color: inherit !important;
+    border: none !important;
+    padding: 10px !important;
+    margin: 0 0 1em 0 !important;
+    //font: inherit !important;
+    cursor: pointer !important;
+    outline: inherit !important;
+    box-shadow: 0 0 3px #222222 !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.dummy-btn:hover {
+    box-shadow: 0 0 6px white !important;
+}
+
+#controls {
+    right: 5vh;
+    text-align: right;
+    position: fixed;
+    position: -webkit-fixed;
+    display: table;
+		
+    }
+
+
+.reveal-btn {
+    margin-right: 0.5em;
+    height: 4em;
+}
+
+.reveal-btn {
+    background: var(--window-bg);
+    
+    padding: 0 10px;
+    display: table-cell;
+    vertical-align: middle;
+    box-shadow: 0 0 3px #22222;
+}
+
+.reveal-btn:hover {
+    opacity: 1;
+    box-shadow: 0 0 4px white;
+}
+
+.reveal-btn:active {
+    filter: brightness(5);
+}
+
+.dummy-placeholder {
+    height: 110px;
+}
+</style>
+
+<script type="text/javascript">
+// https://github.com/ruin1990/AnkiTemplate/blob/main/ClozeAdv/front.html
+
+// key and flow button thanks for kleinerpirat with https://ankiweb.net/shared/info/1231171279
+// Tab for incremental reveal
+// ` for full reveal
+// for custom keycodes: https://keycode.info/
+var keycode_tab = 9;
+var keycode_backquote = 192;
+//var keycode_q = 81;
+//var keycode_w = 87;
+
+var shortcuts = {
+	"next": {
+		"name": "Tab",
+		"keycodes": [keycode_tab/*, keycode_w*/],
+	},
+	"previous": {
+		"name": "Backquote",
+		"keycodes": [keycode_backquote/*, keycode_q*/],
+	}
+};
+
+var cloze_num = -1;
+var have_mathjax_content = false;
+var cloze_objs = new Array;
+
+// flipToBack reference to https://github.com/git9527/anki-awesome-select
+function flipToBack() {
+	if (typeof pycmd !== "undefined") {
+		pycmd("ans")
+	} else if (typeof study !== "undefined") {
+		study.drawAnswer()
+	} else if (typeof AnkiDroidJS !== "undefined") {
+		showAnswer()
+	} else if (window.anki && window.sendMessage2) {
+		window.sendMessage2("ankitap", "midCenter")
+	}
+	console.log("flipToBack");
+}
+
+function cloze_get_answer(text,prefix_len,postfix_len){
+	return text.substr(prefix_len, text.length-prefix_len-postfix_len);
+}
+
+var __mathjax_require_cnt = 0;
+
+function reset_mathjax(){
+	MathJax.typesetPromise()
+	__mathjax_require_cnt--;
+	if(__mathjax_require_cnt>0)
+		setTimeout(() => reset_mathjax(), 200)
+}
+
+function rebuild_mathjax(){
+	//setTimeout(() => MathJax.typesetPromise(), 0)
+	__mathjax_require_cnt+=5;
+	setTimeout(() => reset_mathjax(), 20)
+}
+
+function is_mathjax_content(x){
+	let cx = x.replace(/\\\[.+\\]/g, "").replace(/\\\(.+\\\)/g, "")
+	let is = !(cx == x);
+	//console.log("is_mathjax_content: x =" + x )
+	//console.log("is_mathjax_content: cx=" + cx )
+	console.log("is_mathjax_content: " + is)
+	return is;
+}
+
+function get_match_double_braces_index(x)
+{
+	let cnt = 0;
+	for(let i = 2; i < x.length; i++)
+	{
+		if( x[i] == '{' && x[i+1] == '{')
+			cnt = cnt + 1;
+		else if(x[i] == '}' && x[i+1] == '}'){
+			if(cnt == 0)
+				return i;
+			cnt = cnt - 1;
+		}
+	}
+	return -1;
+}
+
+function get_cur_cloze_id(){
+	let bak_id = null;
+	
+	let dst=$('#ruin_temp_dst').html()
+	let src=$('#ruin_temp_src').html()
+	
+	//console.log(src)
+	//console.log(dst)
+	//dst = dst.replace('<span class="cloze">[...]<\/span>', '[...]') // may not nesscessary
+	//console.log(src)
+	//console.log(dst)
+	let len = Math.max(dst.length, src.length)
+ 
+	//const cloze_tmp = "<span class=\"cloze\">[...]</span>"
+	//const cloze_tmp = "[...]"
+	//const cloze_skip = cloze_tmp.length - 1
+	for(var i=0, j=0;i<len;i++,j++){
+		if(src[i] == dst[j])
+			continue;
+		//console.log(i + ":" + src[i] + ":"  + j + ":" +  dst[j])
+		//console.log("####################")
+		if(src[i] == '{' && src[i+1] == '{' && src[i+2] == 'c' && !isNaN(src[i+3])){
+			let src_tmp = src.substr(i);
+			
+			let end = get_match_double_braces_index(src_tmp);
+			let text_start = src_tmp.indexOf("::");
+			//console.log("end=" + end);
+			//console.log("text_start=" + text_start);
+			if(end == -1 || text_start==-1)
+				return bak_id;//todo:
+			// \{\{c[id]::[text]\}\} 
+			let id = src_tmp.substr(3, text_start-3);
+			let src_text = src_tmp.substr(text_start+2, end-text_start-2);
+			
+			let text;
+			let hint_idx = src_text.indexOf("::");
+			if(hint_idx>=0){
+				text = src_text.substr(0, hint_idx);
+			}else
+				text = src_text;
+			let dst_tmp = dst.substr(j, text.length);
+			//console.log("id=" + id);
+			//console.log("text=" + text);
+			//console.log("dddd=" + dst_tmp);
+			if(text == dst_tmp){
+				i+=(src_text.length+5+id.length+2-1);
+				j+=(text.length-1);
+				//console.log("##continue id=" + id);
+				continue;
+			}
+			else
+			{
+				//console.log("##return id=" + id);
+				return id;
+			}
+		}
+		return bak_id;
+	}
+}
+
+function hasScrollbar() {
+	return document.body.scrollHeight > (window.innerHeight || document.documentElement.clientHeight);
+}
+
+function isInViewPort(element) {
+    let viewWidth = window.innerWidth || document.documentElement.clientWidth;
+    let viewHeight =
+          window.innerHeight || document.documentElement.clientHeight;
+    let x = element.getBoundingClientRect();
+ 
+    return x.top >= 0 && x.left >= 0 && x.right <= viewWidth && x.bottom <= viewHeight;
+}
+
+function cloze_toggle(item){
+	let block = item.children("div.ruin_quiz");
+	let ans = item.children("div.ruin_answer");
+	let ans_not_shown = ("" + ans.attr("style")).indexOf("inline") == -1;
+	
+	//console.log(x)
+	if(ans_not_shown)
+	{
+		if(!isInViewPort(item[0]))
+		{
+			//console.log("focus");
+			item.focus();
+			return;
+		}
+	
+		block.hide();
+		ans.css("display","inline");
+		item.attr("answer", "on");
+		cloze_num--;
+		//console.log(cloze_num);
+		if(cloze_num<=0 && !hasScrollbar() && have_mathjax_content==false)
+		{
+			flipToBack();
+		}
+	}
+	else
+	{
+		ans.hide();
+		block.css("display","inline");
+		item.attr("answer", "off");
+		cloze_num++;
+		//console.log(cloze_num);
+	}
+	item.focus();
+	//$.scrollTo(item, 120);//TODO:
+	//console.log(ans.attr("style"));
+	//console.log("a:" + ans.html());
+}
+
+function cloze_onclick(){
+	cloze_toggle($(this));
+}
+
+function remove_cloze_tag(tmp, quiz_id=-1){
+	let x1 = tmp;
+	let x2 = "";
+	let idx = x1.indexOf("\{\{c");
+	//console.log("----------------");
+	while(idx!=-1)
+	{
+		let str_tmp = x1.substr(idx);
+		let text_start = str_tmp.indexOf("::");
+		end = get_match_double_braces_index(str_tmp);
+		//console.log("str_tmp="+str_tmp);
+		//console.log("end="+end);
+		//console.log("text_start="+text_start);
+		if(end == -1 || text_start==-1)
+			break;
+		// \{\{c[id]::[text]\}\} 
+		let id = str_tmp.substr(3, text_start-3);
+		let text_hint = str_tmp.substr(text_start+2, end-text_start-2);
+		let src_text = str_tmp.substring(0, end+2);
+		
+		let text,hint;
+		let hint_idx = text_hint.indexOf("::");
+		if(hint_idx>=0){
+			text = text_hint.substr(0, hint_idx);
+			hint = "[" + text_hint.substr(hint_idx+2) + "]";
+		}else{
+			text = text_hint;
+			hint = "[...]"
+		}
+		
+		//console.log("id="+id);
+		//console.log("text_hint="+text_hint);
+		//console.log("text="+text);
+		//console.log("hint="+hint);
+		//console.log("src_text="+src_text);
+		
+		if(id == quiz_id)
+			x1 = x1.replace(src_text, hint);
+		else
+			x1 = x1.replace(src_text, text);
+		//console.log("x1="+x1);
+		//console.log("================");
+		idx = x1.indexOf("\{\{c");
+	}
+	//console.log("----------------");
+	return x1;
+	/*while(x1.indexOf("\{\{c")!=-1 && x1!=x2)
+	{
+		x2 = x1;
+		//x1 = x1.replace(/\{\{c[\d]+::(.*)\}\}/mg, "$1")
+		x1 = x1.replace(/\{\{c[\d]+::((?!\{\{).)*\}\}/mg, "$1")
+	}
+	return x1;*/
+}
+
+function convert_cloze_text_into_quiz(text, id){
+	return remove_cloze_tag(text, id);
+	/*let re=new RegExp("\{\{c" + id +"::((?!\{\{|\}\}).)*\}\}","mg");
+	x1 = text.replace(re, "[...]");
+	x1 = remove_cloze_tag(x1);
+	//x1 = remove_cloze_tag(text);
+	return x1;*/
+}
+
+function coverPrevious() {
+	/*let previous = null;
+	let flag = 0;
+	$('.cloze').each(function(){
+		if(flag != 0)
+			return;
+		if($(this).attr("answer") == "off" && previous!=null && previous.attr("answer")=="on"){
+			cloze_toggle(previous);
+			flag = 1;
+		}
+		previous = $(this);
+	});
+	if(flag == 0 && previous!=null && previous.attr("answer")=="on"){
+		cloze_toggle(previous);
+	}*/
+	
+	let cloze_len = cloze_objs.length;
+	for(let i=cloze_len-1; i>=0; i--)
+	{
+		if(cloze_objs[i].attr("answer") == "on"){
+			cloze_toggle(cloze_objs[i]);
+			return;
+		}
+	}
+}
+
+function revealNext() {
+	//let flag = 0;
+	if(cloze_num<=0)
+	{
+		flipToBack();
+	}
+	/*$('.cloze').each(function(){
+		if(flag != 0)
+			return;
+		if($(this).attr("answer") == "off"){
+			cloze_toggle($(this));
+			flag = 1;
+		}
+	});*/
+	let cloze_len = cloze_objs.length;
+	let idx = -1;
+	for(let i=cloze_len-1; i>=0; i--)
+	{
+		if(cloze_objs[i].attr("answer") == "on"){
+			idx = i+1;
+			break;
+		}
+	}
+	if(idx < cloze_len && idx>=0)
+	{
+		if(cloze_objs[idx].attr("answer") == "off"){
+			cloze_toggle(cloze_objs[idx]);
+			return;
+		}
+	}
+	for(let i=0; i<cloze_len; i++)
+	{
+		if(cloze_objs[i].attr("answer") == "off"){
+			cloze_toggle(cloze_objs[i]);
+			break;
+		}
+	}
+}
+
+function convert_mathjax_into_cloze(id){
+	let src=$('#ruin_temp_src').html();
+	let dst=$('#ruin_temp_dst').html();
+	//console.log(dst);
+	//console.log("###start answer");
+	//dst = dst.replace(re, "<span class=\"cloze\">\\$1</span>");
+	//dst = dst.replace(re, function(x){
+	
+	let mjblk = new Array(0);
+	let i = 0;
+	src = src.replace(/(\\[\[(]((?!\\[\[(]).)*\\[\)\]])/mg, function(x){
+		i += 1;
+		//console.log("###i ="+i);
+		//console.log("###x ="+x);
+		if(x.indexOf("\{\{c" + id + "::")==-1)
+			return x;
+		//x2 = x.replace(/\{\{c[\d]+::(.*)\}\}/mg, "$1")
+		let x2 = remove_cloze_tag(x)
+		//console.log("###x2="+x2);
+		if(x == x2)
+			return x;
+		
+		xid = convert_cloze_text_into_quiz(x, id);
+		mjblk.push(xid);
+		//mjblk.push(i);
+		//console.log("###i ="+i);
+		//console.log("###x ="+x);
+		//console.log("###xid ="+xid);
+		//console.log("###x2="+x2);
+		return "\{\{c" + id + "::" +x2+"\}\}";
+	});
+	//console.log("###quiz");
+	//console.log("###mjblk=" + mjblk);
+	i=0;
+	dst = dst.replace(/(\\[\[(]((?!\\[\[(]).)*\\[\)\]])/mg, function(x){
+		i += 1;
+
+		if(/*x.indexOf('[...]')==-1 ||*/ mjblk.indexOf(x)==-1) // TODO: regex match may not sorted in a same result
+		//if(x.indexOf('[...]')==-1) // then you can use this, but it cannot work properly if mathjax block contains [...]
+			return x;
+
+		//console.log("###x ="+x);
+		return "<span class=\"cloze\">" +x+"</span>";
+	});
+	
+	//console.log("###end");
+	//console.log(src);
+	$('#ruin_temp_src').html(src);
+	$('#ruin_temp_dst').html(dst);
+	
+	have_mathjax_content=is_mathjax_content(dst);
+	//console.log(dst);
+}
+
+function add_answer_into_cloze(){
+	let id = get_cur_cloze_id();
+	if(id == null)
+	{
+		console.log("find cloze id failed")
+		return;
+	}
+	console.log("find cloze id = " + id)
+	convert_mathjax_into_cloze(id);
+	
+	let src=$('#ruin_temp_src').html()
+	//let re=new RegExp("\{\{c" + id +"::[^\{\{|\}\}]*\}\}","mg");
+	//let re=new RegExp("\{\{c" + id +"::((?!\{\{).)*\}\}","mg");
+	//let re=new RegExp("\{\{c" + id +"::((?!\{\{c" + id + "::.*\}\}).)*\}\}","mg");
+	let re=new RegExp("\{\{c" + id +"::((?!\{\{|\}\}).)*\}\}","mg");
+	
+	let prefix_len = id.length + 5
+	let postfix_len = 2
+	
+	m = src.match(re);
+	
+	let arr = new Array;
+	if(m.length > 0)
+		cloze_num = m.length;
+	for(let i=0;i<m.length;i++){
+		arr.push(cloze_get_answer(m[i],prefix_len,postfix_len))
+	}
+	//console.log(arr)
+	let idx = 0
+	$('.cloze').each(function(){
+		$(this).attr("tabindex", idx+10000);//for auto scroll
+		$(this).attr("answer", "off");
+		let src_html = $(this).html();
+		let answer;
+		let hint_idx = arr[idx].indexOf("::");
+		if(hint_idx>=0){
+			answer = arr[idx].substr(0, hint_idx);
+		}else{
+			answer = arr[idx];
+		}
+		$(this).html('<div class="ruin_quiz" style="display:inline;">'+src_html+'</div><div  class="ruin_answer" style="display:none;">'+answer+'</div>');
+		//$(this).html('<span class="ruin_quiz"">'+src_html+'</span><span  class="ruin_answer" style="display:none;">'+arr[idx]+'</span>');
+		idx++;
+		cloze_objs.push($(this));
+	});
+	
+	$('.cloze').on("click", cloze_onclick);
+
+	//free some component, if not needed
+	$('#ruin_temp_src').remove();
+	//$('#ruin_cloze_preprocess').remove();
+	
+	rebuild_mathjax();
+}
+
+
+function setupControls() {
+	if(document.keyeventflag != "keyeventflag"){ // avoid for add keyevent listener multi-times
+		//console.log(document.keyeventflag);
+		document.keyeventflag = "keyeventflag";
+		document.addEventListener("keydown", (event) => {
+			/*if (event.keyCode == shortcuts.next.keycode) {
+				event.preventDefault();
+				revealNext();
+			}
+			else if (event.keyCode == shortcuts.previous.keycode) coverPrevious();*/
+			if (shortcuts.next.keycodes.includes(event.keyCode)) {
+				event.preventDefault();
+				revealNext();
+			}
+			else if (shortcuts.previous.keycodes.includes(event.keyCode)) 
+				coverPrevious();
+		});
+	}
+
+	let next = document.getElementById("reveal-next");
+	let nextKey = shortcuts.next.name;
+	next.title = `Reveal next cloze (${nextKey})`;
+	next.addEventListener("click", revealNext);
+
+	let previous = document.getElementById("cover-previous");
+	let previousKey = shortcuts.previous.name;
+	previous.title = `Cover the previous cloze (${previousKey})`;
+	previous.addEventListener("click", coverPrevious);
+	
+	let lang = (navigator.browserLanguage || navigator.language).toLowerCase();
+	console.log("lang="+lang);
+	if(lang.startsWith("zh")) {// translate, you can add other language
+		next.innerHTML  = "翻开下一个";
+		previous.innerHTML  = "覆盖上一个";
+	}
+	next.innerHTML  += "<br>("+nextKey+")";
+	previous.innerHTML  += "<br>("+previousKey+")";
+}
+
+add_answer_into_cloze();
+setupControls();
+</script>
+
