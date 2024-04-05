@@ -1,6 +1,6 @@
 # Cloze Interactive (a revised version from https://github.com/huandney/Anki-Cloze-Interactive/blob/main/README.md)
 
-[This is forked README from https://github.com/huandney](https://github.com/huandney)
+******[This is forked README from https://github.com/huandney](https://github.com/huandney)******
 In addition to the below features, this version features toggle and preference css code. Huge shout out to huandney! This is the best Cloze code that I could find.
 
 This is a script for Anki that enhances the functionality of cloze cards, allowing individual revelation and hiding of clozes still on the front of the card. It supports touch gestures and keyboard shortcuts. It is compatible with AnkiDroid, AnkiMobile and supports MathJax rendering.
