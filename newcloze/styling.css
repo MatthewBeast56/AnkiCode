@@ -1,19 +1,26 @@
 .card {
     font-family: arial;
-    font-size: 20px;
+    font-size: 50px;
     text-align: center;
     color: black;
     background-color: white;
 }
 
+.mobile .card{
+	font-size: 24px;
+}
+
 /* Styles for clozes */
 .cloze {
     font-weight: bold;
-    color: lightblue
+    color: #2F52E0;
 }
 .nightMode .cloze {
-    color: lightblue;
+    color: aquamarine;
+    
 }
+.night_mode img { filter:invert(1); }
+
 a.cloze {
     text-decoration: none;
 }
